@@ -97,19 +97,60 @@ func (c *Colony) DFS(start *Room, end *Room, path []string, allPaths *[][]string
 	path = path[:len(path)-1]
 }
 
+func ProcessInputFile(filename string) (*Colony, error) {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	lines := strings.Split(string(data), "\n")
+	colony := NewColony()
+	var startSet, endSet bool
+
+	for i, line := range lines {
+		line = strings.TrimSpace(line)
+		if i == 0 {
+			antCount, err := strconv.Atoi(line)
+			if err != nil {
+				return nil, fmt.Errorf("invalid ant count: %s", line)
+			}
+			colony.SetAntCount(antCount)
+		} else if line == "##start" {
+			i++
+			startRoom := strings.Split(lines[i], " ")[0]
+			colony.SetStart(startRoom)
+			startSet = true
+		} else if line == "##end" {
+			i++
+			endRoom := strings.Split(lines[i], " ")[0]
+			colony.SetEnd(endRoom)
+			endSet = true
+		} else if strings.Contains(line, "-") {
+			rooms := strings.Split(line, "-")
+			if len(rooms) == 2 {
+				colony.AddTunnel(rooms[0], rooms[1])
+			}
+		}
+	}
+
+	if !startSet || !endSet {
+		return nil, fmt.Errorf("start or end room not set")
+	}
+
+	return colony, nil
+}
+
 func main() {
 	if len(os.Args) != 2 {
 		fmt.Println("Usage: go run . <filename>")
 		return
 	}
-	data, err := os.ReadFile(os.Args[1])
+
+	colony, err := ProcessInputFile(os.Args[1])
 	if err != nil {
-		fmt.Println("Usage: go run . <filename>")
+		fmt.Printf("Error processing input file: %v\n", err)
 		return
 	}
 
-	lines := strings.Split(string(data), "\n")
-	colony := NewColony()
-	
 	allPaths := colony.FindAllPaths()
 }
