@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -25,7 +27,6 @@ func NewColony() *Colony {
 	}
 }
 
-// AddRoom adds a new room to the colony
 func (c *Colony) AddRoom(key string) *Room {
 	if _, exists := c.Rooms[key]; !exists {
 		c.Rooms[key] = &Room{Key: key}
@@ -33,7 +34,6 @@ func (c *Colony) AddRoom(key string) *Room {
 	return c.Rooms[key]
 }
 
-// AddTunnel connects two rooms with a tunnel
 func (c *Colony) AddTunnel(key1, key2 string) {
 	room1 := c.AddRoom(key1)
 	room2 := c.AddRoom(key2)
@@ -64,13 +64,6 @@ func (c *Colony) SetAntCount(count int) {
 	c.AntCount = count
 }
 
-func (c *Colony) FindAllPaths() [][]string {
-	var allPaths [][]string
-	c.ResetVisited()
-	c.DFS(c.Start, c.End, []string{}, &allPaths)
-	return allPaths
-}
-
 func (c *Colony) ResetVisited() {
 	for _, room := range c.Rooms {
 		room.Visited = false
@@ -95,6 +88,94 @@ func (c *Colony) DFS(start *Room, end *Room, path []string, allPaths *[][]string
 
 	start.Visited = false
 	path = path[:len(path)-1]
+}
+
+func (c *Colony) FindAllPaths() [][]string {
+	var allPaths [][]string
+	c.ResetVisited()
+	c.DFS(c.Start, c.End, []string{}, &allPaths)
+	return allPaths
+}
+
+func SortPaths(paths [][]string) {
+	sort.Slice(paths, func(i, j int) bool {
+		return len(paths[i]) < len(paths[j])
+	})
+}
+
+func (c *Colony) SelectOptimalPaths(sortedPaths [][]string) [][]string {
+	var optimalPaths [][]string
+	usedRooms := make(map[string]bool)
+
+	for _, path := range sortedPaths {
+		isValid := true
+		for _, room := range path[1 : len(path)-1] {
+			if usedRooms[room] {
+				isValid = false
+				break
+			}
+		}
+		if isValid {
+			optimalPaths = append(optimalPaths, path)
+			for _, room := range path[1 : len(path)-1] {
+				usedRooms[room] = true
+			}
+		}
+		if len(optimalPaths) >= c.AntCount {
+			break
+		}
+	}
+	return optimalPaths
+}
+
+func (c *Colony) DistributeAnts(paths [][]string) []int {
+	antDistribution := make([]int, len(paths))
+	remainingAnts := c.AntCount
+
+	for remainingAnts > 0 {
+		for i := range paths {
+			if remainingAnts > 0 {
+				antDistribution[i]++
+				remainingAnts--
+			} else {
+				break
+			}
+		}
+	}
+	return antDistribution
+}
+
+func (c *Colony) SimulateAntMovement(paths [][]string, antDistribution []int) {
+	antPositions := make([]int, c.AntCount)
+	antPaths := make([]int, c.AntCount)
+
+	currentAnt := 0
+	for pathIndex, antCount := range antDistribution {
+		for i := 0; i < antCount; i++ {
+			antPaths[currentAnt] = pathIndex
+			currentAnt++
+		}
+	}
+
+	finished := false
+	turn := 0
+	for !finished {
+		finished = true
+		movements := []string{}
+
+		for ant := 0; ant < c.AntCount; ant++ {
+			if antPositions[ant] < len(paths[antPaths[ant]])-1 {
+				finished = false
+				antPositions[ant]++
+				movements = append(movements, fmt.Sprintf("L%d-%s", ant+1, paths[antPaths[ant]][antPositions[ant]]))
+			}
+		}
+
+		if len(movements) > 0 {
+			fmt.Printf("Turn %d: %s\n", turn+1, strings.Join(movements, " "))
+		}
+		turn++
+	}
 }
 
 func ProcessInputFile(filename string) (*Colony, error) {
@@ -153,4 +234,21 @@ func main() {
 	}
 
 	allPaths := colony.FindAllPaths()
+	SortPaths(allPaths)
+	optimalPaths := colony.SelectOptimalPaths(allPaths)
+	antDistribution := colony.DistributeAnts(optimalPaths)
+
+	fmt.Printf("Number of ants: %d\n", colony.AntCount)
+	fmt.Println("Rooms:")
+	for key := range colony.Rooms {
+		fmt.Println(key)
+	}
+	fmt.Println("Tunnels:")
+	for _, room := range colony.Rooms {
+		for _, tunnel := range room.Tunnels {
+			fmt.Printf("%s-%s\n", room.Key, tunnel.Key)
+		}
+	}
+	fmt.Println("\nAnt movements:")
+	colony.SimulateAntMovement(optimalPaths, antDistribution)
 }
