@@ -1,5 +1,11 @@
 package main
 
+import (
+	"fmt"
+	"os"
+	"strings"
+)
+
 type Room struct {
 	Key     string
 	Tunnels []*Room
@@ -11,6 +17,12 @@ type Colony struct {
 	Start    *Room
 	End      *Room
 	AntCount int
+}
+
+func NewColony() *Colony {
+	return &Colony{
+		Rooms: make(map[string]*Room),
+	}
 }
 
 // AddRoom adds a new room to the colony
@@ -38,4 +50,66 @@ func containsRoom(rooms []*Room, room *Room) bool {
 		}
 	}
 	return false
+}
+
+func (c *Colony) SetStart(key string) {
+	c.Start = c.AddRoom(key)
+}
+
+func (c *Colony) SetEnd(key string) {
+	c.End = c.AddRoom(key)
+}
+
+func (c *Colony) SetAntCount(count int) {
+	c.AntCount = count
+}
+
+func (c *Colony) FindAllPaths() [][]string {
+	var allPaths [][]string
+	c.ResetVisited()
+	c.DFS(c.Start, c.End, []string{}, &allPaths)
+	return allPaths
+}
+
+func (c *Colony) ResetVisited() {
+	for _, room := range c.Rooms {
+		room.Visited = false
+	}
+}
+
+func (c *Colony) DFS(start *Room, end *Room, path []string, allPaths *[][]string) {
+	start.Visited = true
+	path = append(path, start.Key)
+
+	if start == end {
+		pathCopy := make([]string, len(path))
+		copy(pathCopy, path)
+		*allPaths = append(*allPaths, pathCopy)
+	} else {
+		for _, neighbor := range start.Tunnels {
+			if !neighbor.Visited {
+				c.DFS(neighbor, end, path, allPaths)
+			}
+		}
+	}
+
+	start.Visited = false
+	path = path[:len(path)-1]
+}
+
+func main() {
+	if len(os.Args) != 2 {
+		fmt.Println("Usage: go run . <filename>")
+		return
+	}
+	data, err := os.ReadFile(os.Args[1])
+	if err != nil {
+		fmt.Println("Usage: go run . <filename>")
+		return
+	}
+
+	lines := strings.Split(string(data), "\n")
+	colony := NewColony()
+	
+	allPaths := colony.FindAllPaths()
 }
