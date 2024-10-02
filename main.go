@@ -22,8 +22,6 @@ type Colony struct {
 	AntCount int
 }
 
-
-
 func (c *Colony) SelectOptimalPaths(paths [][]string) [][]string {
 	var optimalPaths [][]string
 	bestLength := 0
@@ -148,9 +146,10 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-
 	allPaths := colony.FindAllPaths()
 	SortPaths(&allPaths)
+	fmt.Println(len(allPaths))
+	os.Exit(0)
 	optimalPaths := colony.SelectOptimalPaths(allPaths)
 	antDistribution := colony.DistributeAnts(optimalPaths)
 
@@ -176,42 +175,48 @@ func MakeGraph(filename string) (*Colony, error) {
 	lines := strings.Split(string(data), "\n")
 	var startFlag, endFlag bool
 
-	for i, line := range lines {
-		line = strings.TrimSpace(line)
-		parts := strings.Fields(line)
-		if line == "" {
-			continue
-		}
-		if strings.HasPrefix(line, "#") {
-			if line != "##start" && line != "##end" {
-				continue
-			}
-		}
-		if i == 0 {
-			antCount, err := strconv.Atoi(line)
+	for i := 0; i < len(lines); i++ {
+		lines[i] = strings.TrimSpace(lines[i])
+		parts := strings.Fields(lines[i])
+		switch {
+		case i == 0:
+			antCount, err := strconv.Atoi(lines[i])
 			if err != nil || antCount <= 0 {
 				return nil, fmt.Errorf("ERROR: invalid number of Ants")
 			}
 			colony.SetAntCount(antCount)
-		} else if line == "##start" {
+		case lines[i] == "":
+			continue
+		case strings.HasPrefix(lines[i], "#") && lines[i] != "##start" && lines[i] != "##end":
+			continue
+		case lines[i] == "##start":
 			if startFlag {
 				return nil, fmt.Errorf("ERROR: 2 start points found")
 			}
 			startFlag = true
 			i++
+			if strings.HasPrefix(lines[i], "#") || strings.HasPrefix(lines[0], "L") {
+				return nil, fmt.Errorf("ERROR: Invalid room name")
+			}
 			colony.SetStart(strings.Split(lines[i], " ")[0])
-		} else if line == "##end" {
+		case lines[i] == "##end":
 			if endFlag {
 				return nil, fmt.Errorf("ERROR: 2 end points found")
 			}
 			endFlag = true
 			i++
+			if strings.HasPrefix(lines[i], "#") || strings.HasPrefix(lines[0], "L") {
+				return nil, fmt.Errorf("ERROR: Invalid room name")
+			}
 			colony.SetEnd(strings.Split(lines[i], " ")[0])
-		} else if len(parts) == 3 {
+		case len(parts) == 3:
+			if strings.HasPrefix(parts[0], "L") {
+				return nil, fmt.Errorf("ERROR: Invalid room name")
+			}
 			_, exist := colony.AddRoom(parts[0])
-            if exist {
-                return nil, fmt.Errorf("ERROR: Adding Room Failed, room already Exist")
-            }
+			if exist {
+				return nil, fmt.Errorf("ERROR: room already Exist")
+			}
 			x, err1 := strconv.Atoi(parts[1])
 			y, err2 := strconv.Atoi(parts[2])
 			if err1 != nil || err2 != nil || x < 0 || y < 0 {
@@ -220,8 +225,8 @@ func MakeGraph(filename string) (*Colony, error) {
 			if check := strings.Fields(lines[i-1]); len(check) != 3 && !strings.HasPrefix(lines[i-1], "#") {
 				return nil, fmt.Errorf("ERROR: order disrespected")
 			}
-		} else if len(parts) == 1 {
-			if check := strings.Fields(line); len(check) == 2 {
+		case len(parts) == 1:
+			if check := strings.Split(lines[i], "-"); len(check) == 2 {
 				colony.AddTunnel(check[0], check[1])
 			} else {
 				return nil, fmt.Errorf("ERROR: invalid tunnel")
@@ -278,18 +283,18 @@ func containsRoom(rooms []*Room, room *Room) bool {
 
 func (c *Colony) SetStart(key string) {
 	start, exist := c.AddRoom(key)
-    if exist {
-        log.Fatalln("Adding Start Room Failed")
-    }
-    c.Start = start
+	if exist {
+		log.Fatalln("Adding Start Room Failed")
+	}
+	c.Start = start
 }
 
 func (c *Colony) SetEnd(key string) {
 	end, exist := c.AddRoom(key)
-    if exist {
-        log.Fatalln("Adding end Room Failed")
-    }
-    c.End = end
+	if exist {
+		log.Fatalln("Adding end Room Failed")
+	}
+	c.End = end
 }
 
 func (c *Colony) FindAllPaths() [][]string {
