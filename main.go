@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
-	"sort"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -21,25 +22,248 @@ type Colony struct {
 	AntCount int
 }
 
+
+
+func (c *Colony) SelectOptimalPaths(paths [][]string) [][]string {
+	var optimalPaths [][]string
+	bestLength := 0
+
+	for i := 0; i < len(paths); i++ {
+		validPaths := [][]string{}
+		usedRooms := make(map[string]bool)
+		for j := i; j < len(paths); j++ {
+			isValid := true
+			for _, room := range paths[j][1 : len(paths[j])-1] {
+				if usedRooms[room] {
+					isValid = false
+					break
+				}
+				usedRooms[room] = true
+			}
+			if isValid {
+				validPaths = append(validPaths, paths[j])
+			} else {
+				// Reset used rooms for the next path
+				for _, room := range paths[j][1 : len(paths[j])-1] {
+					usedRooms[room] = false
+				}
+			}
+		}
+
+		antsDistribution := c.DistributeAnts(validPaths)
+		maxSteps := antsDistribution[0] + len(validPaths[0]) - 1
+
+		if len(optimalPaths) == 0 || maxSteps < bestLength {
+			optimalPaths = validPaths
+			bestLength = maxSteps
+		}
+	}
+
+	return optimalPaths
+}
+
+func (c *Colony) DistributeAnts(paths [][]string) []int {
+	antsDistribution := make([]int, len(paths))
+	remainingAnts := c.AntCount
+	round := 0
+
+	for remainingAnts > 0 {
+		for i := range paths {
+			if i+1 > len(paths) || len(paths[i])+round >= len(paths[i+1]) {
+				antsDistribution[i]++
+				remainingAnts--
+				if remainingAnts == 0 {
+					break
+				}
+			}
+		}
+		round++
+	}
+
+	return antsDistribution
+}
+
+func (c *Colony) PrintAntMovement(paths [][]string, antsDistribution []int) {
+	type AntMove struct {
+		antNumber int
+		room      string
+	}
+
+	antPosition := make([]int, c.AntCount+1)
+	antPath := make([]int, c.AntCount+1)
+	currentAnt := 1
+
+	for pathIndex, antsInPath := range antsDistribution {
+		for i := 0; i < antsInPath; i++ {
+			antPath[currentAnt] = pathIndex
+			currentAnt++
+		}
+	}
+
+	for {
+		var moves []AntMove
+		allFinished := true
+		antPresent := make(map[string]bool)
+
+		for i := 1; i <= c.AntCount; i++ {
+			pathIndex := antPath[i]
+
+			if antPosition[i] < len(paths[pathIndex]) {
+				allFinished = false
+				nextRoom := paths[pathIndex][antPosition[i]]
+
+				if !antPresent[nextRoom] || nextRoom == paths[pathIndex][0] || nextRoom == paths[pathIndex][len(paths[pathIndex])-1] {
+					antPosition[i]++
+					if nextRoom != paths[pathIndex][0] {
+						moves = append(moves, AntMove{
+							antNumber: i,
+							room:      nextRoom,
+						})
+					}
+				}
+
+				if nextRoom != paths[pathIndex][0] && nextRoom != paths[pathIndex][len(paths[pathIndex])-1] {
+					antPresent[nextRoom] = true
+				}
+			}
+		}
+
+		if allFinished {
+			break
+		}
+
+		for _, move := range moves {
+			fmt.Printf("L%d-%s ", move.antNumber, move.room)
+		}
+		fmt.Println()
+	}
+}
+
+func main() {
+	if len(os.Args) != 2 {
+		fmt.Println("Usage: go run . <filename>")
+		return
+	}
+	colony, err := MakeGraph(os.Args[1])
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	allPaths := colony.FindAllPaths()
+	SortPaths(&allPaths)
+	optimalPaths := colony.SelectOptimalPaths(allPaths)
+	antDistribution := colony.DistributeAnts(optimalPaths)
+
+	// Print the input data
+	data, _ := os.ReadFile(os.Args[1])
+	fmt.Println(string(data))
+
+	// Print ant movements
+	colony.PrintAntMovement(optimalPaths, antDistribution)
+}
+
+func MakeGraph(filename string) (*Colony, error) {
+	colony := NewColony()
+	if filepath.Ext(filename) != ".txt" {
+		log.Fatalln("Usage: go run . <filename>.txt")
+	}
+
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	lines := strings.Split(string(data), "\n")
+	var startFlag, endFlag bool
+
+	for i, line := range lines {
+		line = strings.TrimSpace(line)
+		parts := strings.Fields(line)
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "#") {
+			if line != "##start" && line != "##end" {
+				continue
+			}
+		}
+		if i == 0 {
+			antCount, err := strconv.Atoi(line)
+			if err != nil || antCount <= 0 {
+				return nil, fmt.Errorf("ERROR: invalid number of Ants")
+			}
+			colony.SetAntCount(antCount)
+		} else if line == "##start" {
+			if startFlag {
+				return nil, fmt.Errorf("ERROR: 2 start points found")
+			}
+			startFlag = true
+			i++
+			colony.SetStart(strings.Split(lines[i], " ")[0])
+		} else if line == "##end" {
+			if endFlag {
+				return nil, fmt.Errorf("ERROR: 2 end points found")
+			}
+			endFlag = true
+			i++
+			colony.SetEnd(strings.Split(lines[i], " ")[0])
+		} else if len(parts) == 3 {
+			_, exist := colony.AddRoom(parts[0])
+            if exist {
+                return nil, fmt.Errorf("ERROR: Adding Room Failed, room already Exist")
+            }
+			x, err1 := strconv.Atoi(parts[1])
+			y, err2 := strconv.Atoi(parts[2])
+			if err1 != nil || err2 != nil || x < 0 || y < 0 {
+				return nil, fmt.Errorf("ERROR: invalid coordinates for room '%s'", parts[0])
+			}
+			if check := strings.Fields(lines[i-1]); len(check) != 3 && !strings.HasPrefix(lines[i-1], "#") {
+				return nil, fmt.Errorf("ERROR: order disrespected")
+			}
+		} else if len(parts) == 1 {
+			if check := strings.Fields(line); len(check) == 2 {
+				colony.AddTunnel(check[0], check[1])
+			} else {
+				return nil, fmt.Errorf("ERROR: invalid tunnel")
+			}
+		}
+	}
+	if !startFlag || !endFlag {
+		return nil, fmt.Errorf("ERROR: Start or End room not found")
+	}
+	return colony, nil
+}
+
 func NewColony() *Colony {
 	return &Colony{
 		Rooms: make(map[string]*Room),
 	}
 }
 
-func (c *Colony) AddRoom(key string) *Room {
+func (c *Colony) SetAntCount(count int) {
+	c.AntCount = count
+}
+
+func (c *Colony) AddRoom(key string) (*Room, bool) {
 	if _, exists := c.Rooms[key]; !exists {
 		c.Rooms[key] = &Room{Key: key}
+		return c.Rooms[key], false
 	}
-	return c.Rooms[key]
+	return c.Rooms[key], true
 }
 
 func (c *Colony) AddTunnel(key1, key2 string) {
-	room1 := c.AddRoom(key1)
-	room2 := c.AddRoom(key2)
-	if !containsRoom(room1.Tunnels, room2) {
-		room1.Tunnels = append(room1.Tunnels, room2)
-		room2.Tunnels = append(room2.Tunnels, room1)
+	if key1 == key2 {
+		log.Fatalln("Adding tunnel Failed: give different rooms")
+	}
+	from, exist := c.AddRoom(key1)
+	to, exist1 := c.AddRoom(key2)
+	if !exist || !exist1 {
+		log.Fatalln("Adding tunnel Failed: rooms Does Not Exist")
+	}
+	if !containsRoom(from.Tunnels, to) {
+		from.Tunnels = append(from.Tunnels, to)
+		to.Tunnels = append(to.Tunnels, from)
 	}
 }
 
@@ -53,202 +277,53 @@ func containsRoom(rooms []*Room, room *Room) bool {
 }
 
 func (c *Colony) SetStart(key string) {
-	c.Start = c.AddRoom(key)
+	start, exist := c.AddRoom(key)
+    if exist {
+        log.Fatalln("Adding Start Room Failed")
+    }
+    c.Start = start
 }
 
 func (c *Colony) SetEnd(key string) {
-	c.End = c.AddRoom(key)
+	end, exist := c.AddRoom(key)
+    if exist {
+        log.Fatalln("Adding end Room Failed")
+    }
+    c.End = end
 }
 
-func (c *Colony) SetAntCount(count int) {
-	c.AntCount = count
-}
-
-func (c *Colony) ResetVisited() {
-	for _, room := range c.Rooms {
-		room.Visited = false
-	}
+func (c *Colony) FindAllPaths() [][]string {
+	var allPaths [][]string
+	c.DFS(c.Start, c.End, []string{}, &allPaths)
+	return allPaths
 }
 
 func (c *Colony) DFS(start *Room, end *Room, path []string, allPaths *[][]string) {
+	if len(*allPaths) > 10000 {
+		return
+	}
 	start.Visited = true
 	path = append(path, start.Key)
 
 	if start == end {
-		pathCopy := make([]string, len(path))
-		copy(pathCopy, path)
-		*allPaths = append(*allPaths, pathCopy)
+		*allPaths = append(*allPaths, append([]string{}, path...))
 	} else {
-		for _, neighbor := range start.Tunnels {
-			if !neighbor.Visited {
-				c.DFS(neighbor, end, path, allPaths)
+		for _, next := range start.Tunnels {
+			if !next.Visited {
+				c.DFS(next, end, path, allPaths)
 			}
 		}
 	}
 
 	start.Visited = false
-	path = path[:len(path)-1]
 }
 
-func (c *Colony) FindAllPaths() [][]string {
-	var allPaths [][]string
-	c.ResetVisited()
-	c.DFS(c.Start, c.End, []string{}, &allPaths)
-	return allPaths
-}
-
-func SortPaths(paths [][]string) {
-	sort.Slice(paths, func(i, j int) bool {
-		return len(paths[i]) < len(paths[j])
-	})
-}
-
-func (c *Colony) SelectOptimalPaths(sortedPaths [][]string) [][]string {
-	var optimalPaths [][]string
-	usedRooms := make(map[string]bool)
-
-	for _, path := range sortedPaths {
-		isValid := true
-		for _, room := range path[1 : len(path)-1] {
-			if usedRooms[room] {
-				isValid = false
-				break
-			}
-		}
-		if isValid {
-			optimalPaths = append(optimalPaths, path)
-			for _, room := range path[1 : len(path)-1] {
-				usedRooms[room] = true
-			}
-		}
-		if len(optimalPaths) >= c.AntCount {
-			break
-		}
-	}
-	return optimalPaths
-}
-
-func (c *Colony) DistributeAnts(paths [][]string) []int {
-	antDistribution := make([]int, len(paths))
-	remainingAnts := c.AntCount
-
-	for remainingAnts > 0 {
-		for i := range paths {
-			if remainingAnts > 0 {
-				antDistribution[i]++
-				remainingAnts--
-			} else {
-				break
+func SortPaths(paths *[][]string) {
+	for i := 0; i < len(*paths); i++ {
+		for j := i + 1; j < len(*paths); j++ {
+			if len((*paths)[i]) > len((*paths)[j]) {
+				(*paths)[i], (*paths)[j] = (*paths)[j], (*paths)[i]
 			}
 		}
 	}
-	return antDistribution
-}
-
-func (c *Colony) SimulateAntMovement(paths [][]string, antDistribution []int) {
-	antPositions := make([]int, c.AntCount)
-	antPaths := make([]int, c.AntCount)
-
-	currentAnt := 0
-	for pathIndex, antCount := range antDistribution {
-		for i := 0; i < antCount; i++ {
-			antPaths[currentAnt] = pathIndex
-			currentAnt++
-		}
-	}
-
-	finished := false
-	turn := 0
-	for !finished {
-		finished = true
-		movements := []string{}
-
-		for ant := 0; ant < c.AntCount; ant++ {
-			if antPositions[ant] < len(paths[antPaths[ant]])-1 {
-				finished = false
-				antPositions[ant]++
-				movements = append(movements, fmt.Sprintf("L%d-%s", ant+1, paths[antPaths[ant]][antPositions[ant]]))
-			}
-		}
-
-		if len(movements) > 0 {
-			fmt.Printf("Turn %d: %s\n", turn+1, strings.Join(movements, " "))
-		}
-		turn++
-	}
-}
-
-func ProcessInputFile(filename string) (*Colony, error) {
-	data, err := os.ReadFile(filename)
-	if err != nil {
-		return nil, err
-	}
-
-	lines := strings.Split(string(data), "\n")
-	colony := NewColony()
-	var startSet, endSet bool
-
-	for i, line := range lines {
-		line = strings.TrimSpace(line)
-		if i == 0 {
-			antCount, err := strconv.Atoi(line)
-			if err != nil {
-				return nil, fmt.Errorf("invalid ant count: %s", line)
-			}
-			colony.SetAntCount(antCount)
-		} else if line == "##start" {
-			i++
-			startRoom := strings.Split(lines[i], " ")[0]
-			colony.SetStart(startRoom)
-			startSet = true
-		} else if line == "##end" {
-			i++
-			endRoom := strings.Split(lines[i], " ")[0]
-			colony.SetEnd(endRoom)
-			endSet = true
-		} else if strings.Contains(line, "-") {
-			rooms := strings.Split(line, "-")
-			if len(rooms) == 2 {
-				colony.AddTunnel(rooms[0], rooms[1])
-			}
-		}
-	}
-
-	if !startSet || !endSet {
-		return nil, fmt.Errorf("start or end room not set")
-	}
-
-	return colony, nil
-}
-
-func main() {
-	if len(os.Args) != 2 {
-		fmt.Println("Usage: go run . <filename>")
-		return
-	}
-
-	colony, err := ProcessInputFile(os.Args[1])
-	if err != nil {
-		fmt.Printf("Error processing input file: %v\n", err)
-		return
-	}
-
-	allPaths := colony.FindAllPaths()
-	SortPaths(allPaths)
-	optimalPaths := colony.SelectOptimalPaths(allPaths)
-	antDistribution := colony.DistributeAnts(optimalPaths)
-
-	fmt.Printf("Number of ants: %d\n", colony.AntCount)
-	fmt.Println("Rooms:")
-	for key := range colony.Rooms {
-		fmt.Println(key)
-	}
-	fmt.Println("Tunnels:")
-	for _, room := range colony.Rooms {
-		for _, tunnel := range room.Tunnels {
-			fmt.Printf("%s-%s\n", room.Key, tunnel.Key)
-		}
-	}
-	fmt.Println("\nAnt movements:")
-	colony.SimulateAntMovement(optimalPaths, antDistribution)
 }
