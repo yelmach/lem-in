@@ -5,8 +5,9 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
+
+	"src/utils"
 )
 
 type Room struct {
@@ -24,13 +25,22 @@ type Colony struct {
 
 func main() {
 	if len(os.Args) != 2 {
-		fmt.Println("Usage: go run . <filename>")
-		return
+		log.Fatalln("usage: go run . <filename>")
 	}
-	colony, err := MakeGraph(os.Args[1])
+	if filepath.Ext(os.Args[1]) != ".txt" {
+		log.Fatalln("usage: go run . <filename>.txt")
+	}
+
+	data, err := os.ReadFile(os.Args[1])
 	if err != nil {
 		log.Fatalln(err)
 	}
+
+	colony, err := MakeColony(data)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
 	allPaths := colony.FindAllPaths()
 	SortPaths(&allPaths)
 	fmt.Println(allPaths)
@@ -42,81 +52,77 @@ func main() {
 	PrintAntMovements(optimizedPaths, colony.AntCount)
 }
 
-
-func MakeGraph(filename string) (*Colony, error) {
+// checking file and adding room to graph and links between rooms
+func MakeColony(data []byte) (*Colony, error) {
 	colony := NewColony()
-	if filepath.Ext(filename) != ".txt" {
-		log.Fatalln("Usage: go run . <filename>.txt")
-	}
+	lines := strings.Split(string(data), "\n")
 
-	data, err := os.ReadFile(filename)
+	antCount, rooms, tunnels, err := utils.ParseInput(lines)
 	if err != nil {
 		return nil, err
 	}
+	colony.SetAntCount(antCount)
 
-	lines := strings.Split(string(data), "\n")
+	// get name of rooms
+	coordMap := make(map[[2]int]bool)
 	var startFlag, endFlag bool
-
-	for i := 0; i < len(lines); i++ {
-		lines[i] = strings.TrimSpace(lines[i])
-		parts := strings.Fields(lines[i])
+	for i := 0; i < len(rooms); i++ {
 		switch {
-		case i == 0:
-			antCount, err := strconv.Atoi(lines[i])
-			if err != nil || antCount <= 0 {
-				return nil, fmt.Errorf("ERROR: invalid number of Ants")
-			}
-			colony.SetAntCount(antCount)
-		case lines[i] == "":
-			continue
-		case strings.HasPrefix(lines[i], "#") && lines[i] != "##start" && lines[i] != "##end":
-			continue
-		case lines[i] == "##start":
+		case rooms[i] == "##start":
 			if startFlag {
 				return nil, fmt.Errorf("ERROR: 2 start points found")
 			}
 			startFlag = true
-			i++
-			if strings.HasPrefix(lines[i], "#") || strings.HasPrefix(lines[0], "L") {
-				return nil, fmt.Errorf("ERROR: Invalid room name")
+			if i+1 < len(rooms) {
+				i++
+				err := utils.CheckingCoord(rooms[i], coordMap)
+				if err != nil {
+					return nil, err
+				}
+				colony.SetStart(strings.Split(rooms[i], " ")[0])
+			} else {
+				return nil, fmt.Errorf("ERROR: No start point found")
 			}
-			colony.SetStart(strings.Split(lines[i], " ")[0])
-		case lines[i] == "##end":
+		case rooms[i] == "##end":
 			if endFlag {
 				return nil, fmt.Errorf("ERROR: 2 end points found")
 			}
 			endFlag = true
-			i++
-			if strings.HasPrefix(lines[i], "#") || strings.HasPrefix(lines[0], "L") {
-				return nil, fmt.Errorf("ERROR: Invalid room name")
+			if i+1 < len(rooms) {
+				i++
+				err := utils.CheckingCoord(rooms[i], coordMap)
+				if err != nil {
+					return nil, err
+				}
+				colony.SetEnd(strings.Split(rooms[i], " ")[0])
+			} else {
+				return nil, fmt.Errorf("ERROR: No end point found")
 			}
-			colony.SetEnd(strings.Split(lines[i], " ")[0])
-		case len(parts) == 3:
-			if strings.HasPrefix(parts[0], "L") {
-				return nil, fmt.Errorf("ERROR: Invalid room name")
+		case len(strings.Fields(rooms[i])) == 3:
+			err := utils.CheckingCoord(rooms[i], coordMap)
+			if err != nil {
+				return nil, err
 			}
-			_, exist := colony.AddRoom(parts[0])
+			// rooms
+			_, exist := colony.AddRoom(strings.Split(rooms[i], " ")[0])
 			if exist {
 				return nil, fmt.Errorf("ERROR: room already Exist")
 			}
-			x, err1 := strconv.Atoi(parts[1])
-			y, err2 := strconv.Atoi(parts[2])
-			if err1 != nil || err2 != nil || x < 0 || y < 0 {
-				return nil, fmt.Errorf("ERROR: invalid coordinates for room '%s'", parts[0])
-			}
-			// if check := strings.Fields(lines[i-1]); len(check) != 3 && !strings.HasPrefix(lines[i-1], "#") {
-			// 	return nil, fmt.Errorf("ERROR: order disrespected")
-			// }
-		case len(parts) == 1:
-			if check := strings.Split(lines[i], "-"); len(check) == 2 {
-				colony.AddTunnel(check[0], check[1])
-			} else {
-				return nil, fmt.Errorf("ERROR: invalid tunnel")
-			}
+		default:
+			return nil, fmt.Errorf("ERROR: invalid data format")
 		}
 	}
 	if !startFlag || !endFlag {
 		return nil, fmt.Errorf("ERROR: Start or End room not found")
+	}
+
+	// add links between rooms
+	for i := 0; i < len(tunnels); i++ {
+		if check := strings.Split(tunnels[i], "-"); len(check) == 2 {
+			colony.AddTunnel(check[0], check[1])
+		} else {
+			return nil, fmt.Errorf("ERROR: invalid tunnel")
+		}
 	}
 	return colony, nil
 }
@@ -141,16 +147,18 @@ func (c *Colony) AddRoom(key string) (*Room, bool) {
 
 func (c *Colony) AddTunnel(key1, key2 string) {
 	if key1 == key2 {
-		log.Fatalln("Adding tunnel Failed: give different rooms")
+		log.Fatalf("ERROR: Adding link Failed, you give same room: '%s'", key1)
 	}
 	from, exist := c.AddRoom(key1)
 	to, exist1 := c.AddRoom(key2)
 	if !exist || !exist1 {
-		log.Fatalln("Adding tunnel Failed: rooms Does Not Exist")
+		log.Fatalln("Adding link Failed: rooms Does Not Exist")
 	}
 	if !containsRoom(from.Tunnels, to) {
 		from.Tunnels = append(from.Tunnels, to)
 		to.Tunnels = append(to.Tunnels, from)
+	} else {
+		log.Fatalln("Adding link Failed: link already Exist")
 	}
 }
 
@@ -179,13 +187,15 @@ func (c *Colony) SetEnd(key string) {
 	c.End = end
 }
 
+// end
+
 func (c *Colony) FindAllPaths() [][]string {
 	var allPaths [][]string
-	c.DFS(c.Start, c.End, []string{}, &allPaths)
+	DFS(c.Start, c.End, []string{}, &allPaths)
 	return allPaths
 }
 
-func (c *Colony) DFS(start *Room, end *Room, path []string, allPaths *[][]string) {
+func DFS(start *Room, end *Room, path []string, allPaths *[][]string) {
 	if len(*allPaths) > 10000 {
 		return
 	}
@@ -197,7 +207,7 @@ func (c *Colony) DFS(start *Room, end *Room, path []string, allPaths *[][]string
 	} else {
 		for _, next := range start.Tunnels {
 			if !next.Visited {
-				c.DFS(next, end, path, allPaths)
+				DFS(next, end, path, allPaths)
 			}
 		}
 	}
@@ -240,21 +250,21 @@ func FindDisjointPaths(allpaths [][]string, start, end string, antCount int) [][
 		fmt.Println(validPaths)
 
 		if len(validPaths) > 0 {
-            antDistribution := distributeAnts(validPaths, antCount)
-            totalTime := 0
-            for i, count := range antDistribution {
-                if count > 0 {
-                    pathTime := len(validPaths[i]) - 1 + count
-                    if pathTime > totalTime {
-                        totalTime = pathTime
-                    }
-                }
-            }
+			antDistribution := distributeAnts(validPaths, antCount)
+			totalTime := 0
+			for i, count := range antDistribution {
+				if count > 0 {
+					pathTime := len(validPaths[i]) - 1 + count
+					if pathTime > totalTime {
+						totalTime = pathTime
+					}
+				}
+			}
 
-            if bestTotalTime == 0 || totalTime < bestTotalTime {
-                bestPaths = validPaths
-                bestTotalTime = totalTime
-            }
+			if bestTotalTime == 0 || totalTime < bestTotalTime {
+				bestPaths = validPaths
+				bestTotalTime = totalTime
+			}
 		}
 	}
 
@@ -262,28 +272,28 @@ func FindDisjointPaths(allpaths [][]string, start, end string, antCount int) [][
 }
 
 func distributeAnts(paths [][]string, antCount int) []int {
-    distribution := make([]int, len(paths))
-    pathLengths := make([]int, len(paths))
-    for i, path := range paths {
-        pathLengths[i] = len(path) - 1 // Subtract 1 because we don't count the start room
-    }
+	distribution := make([]int, len(paths))
+	pathLengths := make([]int, len(paths))
+	for i, path := range paths {
+		pathLengths[i] = len(path) - 1 // Subtract 1 because we don't count the start room
+	}
 
-    for ant := 1; ant <= antCount; ant++ {
-        bestPath := 0
-        bestArrivalTime := pathLengths[0] + distribution[0] + 1
+	for ant := 1; ant <= antCount; ant++ {
+		bestPath := 0
+		bestArrivalTime := pathLengths[0] + distribution[0] + 1
 
-        for i := 1; i < len(paths); i++ {
-            arrivalTime := pathLengths[i] + distribution[i] + 1
-            if arrivalTime < bestArrivalTime {
-                bestPath = i
-                bestArrivalTime = arrivalTime
-            }
-        }
+		for i := 1; i < len(paths); i++ {
+			arrivalTime := pathLengths[i] + distribution[i] + 1
+			if arrivalTime < bestArrivalTime {
+				bestPath = i
+				bestArrivalTime = arrivalTime
+			}
+		}
 
-        distribution[bestPath]++
-    }
+		distribution[bestPath]++
+	}
 
-    return distribution
+	return distribution
 }
 
 func PrintAntMovements(paths [][]string, antCount int) {
