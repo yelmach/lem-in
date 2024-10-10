@@ -45,7 +45,7 @@ func main() {
 	SortPaths(&allPaths)
 	fmt.Println(allPaths)
 
-	optimizedPaths := FindDisjointPaths(allPaths, colony.Start.Key, colony.End.Key, colony.AntCount)
+	optimizedPaths := cleanPaths(allPaths, colony.Start.Key, colony.End.Key, colony.AntCount)
 	fmt.Println(optimizedPaths)
 
 	// Print ant movements
@@ -224,7 +224,9 @@ func SortPaths(paths *[][]string) {
 		}
 	}
 }
+// ----------------------------------------------------------------
 
+/*
 func FindDisjointPaths(allpaths [][]string, start, end string, antCount int) [][]string {
 	bestPaths := [][]string{}
 	bestTotalTime := 0
@@ -354,6 +356,166 @@ func PrintAntMovements(paths [][]string, antCount int) {
 			break
 		}
 
+		for _, move := range moves {
+			fmt.Printf("L%d-%s ", move.antNumber, move.room)
+		}
+		fmt.Println()
+	}
+}*/
+
+
+func cleanPaths(pathes [][]string, start, end string, naml int) [][]string {
+	finalpath := [][]string{}
+	l := 0
+	for i := 0; i < len(pathes); i++ {
+		validPaths := [][]string{}
+		nodeMap := make(map[string]int)
+		for j := i; j < len(pathes); j++ {
+			doz := true
+			s := 0
+			for _, node := range pathes[j] {
+				if node != end && node != start {
+					nodeMap[node]++ //=nodemap[A]==1  nodemap[B]==2 nodemap[C]==1
+					s++
+				}
+				if nodeMap[node] > 1 {
+					doz = false
+					for _, node := range pathes[j] {
+						s--
+						nodeMap[node]--
+						if s == 0 {
+							break
+						}
+					}
+					break
+				}
+			}
+			if doz {
+				validPaths = append(validPaths, pathes[j])
+			}
+		}
+		if comparisonpath(validPaths, finalpath, naml, &l) {
+			finalpath = validPaths
+		}
+	}
+	return finalpath
+}
+
+func comparisonpath(validPaths, finalpath [][]string, naml int, l *int) bool {
+	if finalpath == nil {
+		return true
+	}
+	if len(validPaths) == 0 {
+		return false
+	}
+	arypaths := make([]int, len(validPaths))
+	arypaths = HowManyAntsInEachPath(validPaths, naml)
+	if *l == 0 || arypaths[0]+len(validPaths[0]) < *l {
+		*l = arypaths[0] + len(validPaths[0])
+		return true
+	}
+	return false
+}
+
+func HowManyAntsInEachPath(pathes [][]string, naml int) []int {
+	arypaths := make([]int, len(pathes))
+	doz := 0
+	k := 0
+	if len(pathes) == 0 {
+		os.Exit(1)
+	}
+	for naml > 0 {
+		if len(pathes) > doz+1 && len(pathes[doz])+k >= len(pathes[doz+1]) {
+			k = 0
+			doz++
+			continue
+		}
+		for i := 0; i <= doz; i++ {
+			arypaths[i]++
+			naml--
+			if naml == 0 {
+				break
+			}
+			k++
+		}
+	}
+	return arypaths
+}
+
+func PrintAntMovements(paths [][]string, numAnts int) {
+	// Get the number of ants assigned to each path
+	antsInEachPath := HowManyAntsInEachPath(paths, numAnts)
+
+	// Struct to represent an ant's movement with its number and the room it's moving to
+	type AntMove struct {
+		antNumber int
+		room      string
+	}
+
+	// Arrays to track each ant's current position in their path and which path they are on
+	antPosition := make([]int, numAnts+1)
+	antPath := make([]int, numAnts+1)
+	currentAnt := 1
+
+	// Distribute ants across the paths based on the number of ants assigned to each path
+	for pathIndex, antsInPath := range antsInEachPath { //[0,0,0]
+		for i := 0; i < antsInPath; i++ {
+			antPath[currentAnt] = pathIndex // Assign the ant to a path
+			currentAnt++
+		}
+	}
+
+	for {
+		var moves []AntMove
+		allFinished := true
+		antPresent := make(map[string]bool)
+		finishedInPath := make(map[int]bool)
+
+		for i := 1; i <= numAnts; i++ {
+			pathIndex := antPath[i]
+
+			// Check if the ant hasn't reached the end of its path
+			if antPosition[i] < len(paths[pathIndex]) {
+				allFinished = false
+				nextRoom := paths[pathIndex][antPosition[i]]
+
+				if !antPresent[nextRoom] || nextRoom == paths[pathIndex][0] || nextRoom == paths[pathIndex][len(paths[pathIndex])-1] {
+					if nextRoom == paths[pathIndex][len(paths[pathIndex])-1] {
+						if !finishedInPath[pathIndex] {
+							antPosition[i]++
+
+							if nextRoom != paths[pathIndex][0] {
+								moves = append(moves, AntMove{
+									antNumber: i,
+									room:      nextRoom,
+								})
+							}
+						}
+						finishedInPath[pathIndex] = true
+					} else {
+
+						antPosition[i]++
+						if nextRoom != paths[pathIndex][0] {
+							moves = append(moves, AntMove{
+								antNumber: i,
+								room:      nextRoom,
+							})
+						}
+					}
+				}
+				// If the ant is in an intermediate room, mark it as present
+				if nextRoom != paths[pathIndex][0] && nextRoom != paths[pathIndex][len(paths[pathIndex])-1] {
+					antPresent[nextRoom] = true
+				}
+			}
+		}
+
+		// If all ants have finished moving, exit the loop
+		if allFinished {
+			break
+		}
+
+		// Print all the movements of ants in this round
 		for _, move := range moves {
 			fmt.Printf("L%d-%s ", move.antNumber, move.room)
 		}
