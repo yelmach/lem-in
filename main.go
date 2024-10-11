@@ -36,7 +36,7 @@ func main() {
 	pathfinder.SortPaths(&allPaths)
 	fmt.Println(allPaths)
 
-	optimizedPaths := pathfinder.FindDisjointPaths(allPaths, colony.Start.Key, colony.End.Key, colony.AntCount)
+	optimizedPaths := pathfinder.FindOptimalPaths(allPaths, colony.Start.Key, colony.End.Key, colony.AntCount)
 	fmt.Println(optimizedPaths)
 
 	// Print ant movements

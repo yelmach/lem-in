@@ -1,74 +1,81 @@
 package pathfinder
 
-import "fmt"
-
-func FindDisjointPaths(allpaths [][]string, start, end string, antCount int) [][]string {
+func FindOptimalPaths(allPaths [][]string, start, end string, antCount int) [][]string {
 	bestPaths := [][]string{}
-	bestTotalTime := 0
+	bestLength := 0
 
-	for i := 0; i < len(allpaths); i++ {
-		validPaths := [][]string{}
+	for i := 0; i < len(allPaths); i++ {
+		currentPaths := [][]string{}
 		usedRooms := make(map[string]bool)
 
-		for j := i; j < len(allpaths); j++ {
-			isValid := true
-			for _, room := range allpaths[j][1 : len(allpaths[j])-1] {
-				if usedRooms[room] {
-					isValid = false
-					break
-				}
-				usedRooms[room] = true
-			}
-
-			if isValid {
-				validPaths = append(validPaths, allpaths[j])
+		for _, path := range allPaths[i:] {
+			if isValidPath(path, start, end, usedRooms) {
+				currentPaths = append(currentPaths, path)
+				markRoomsAsUsed(path, start, end, usedRooms)
 			}
 		}
-		fmt.Println(validPaths)
 
-		if len(validPaths) > 0 {
-			antDistribution := DistributeAnts(validPaths, antCount)
-			totalTime := 0
-			for i, count := range antDistribution {
-				if count > 0 {
-					pathTime := len(validPaths[i]) - 1 + count
-					if pathTime > totalTime {
-						totalTime = pathTime
-					}
-				}
-			}
-
-			if bestTotalTime == 0 || totalTime < bestTotalTime {
-				bestPaths = validPaths
-				bestTotalTime = totalTime
-			}
+		if isNewPathSetBetter(currentPaths, bestPaths, antCount, &bestLength) {
+			bestPaths = currentPaths
 		}
 	}
 
 	return bestPaths
 }
 
+func isValidPath(path []string, start, end string, usedRooms map[string]bool) bool {
+	for _, room := range path[1 : len(path)-1] {
+		if room != start && room != end && usedRooms[room] {
+			return false
+		}
+	}
+	return true
+}
+
+func markRoomsAsUsed(path []string, start, end string, usedRooms map[string]bool) {
+	for _, room := range path[1 : len(path)-1] {
+		if room != start && room != end {
+			usedRooms[room] = true
+		}
+	}
+}
+
+func isNewPathSetBetter(validPaths, currentBestPaths [][]string, ants int, currentBestLength *int) bool {
+	if currentBestPaths == nil {
+		return true
+	}
+	if len(validPaths) == 0 {
+		return false
+	}
+	antsPerPath := DistributeAnts(validPaths, ants)
+	if *currentBestLength == 0 || antsPerPath[0]+len(validPaths[0]) < *currentBestLength {
+		*currentBestLength = antsPerPath[0] + len(validPaths[0])
+		return true
+	}
+	return false
+}
+
 func DistributeAnts(paths [][]string, antCount int) []int {
-	distribution := make([]int, len(paths))
+	antDistribution := make([]int, len(paths))
 	pathLengths := make([]int, len(paths))
 	for i, path := range paths {
-		pathLengths[i] = len(path) - 1 // Subtract 1 because we don't count the start room
+		pathLengths[i] = len(path) - 1 // Subtract 1 to not count the start room
 	}
 
-	for ant := 1; ant <= antCount; ant++ {
-		bestPath := 0
-		bestArrivalTime := pathLengths[0] + distribution[0] + 1
+	for ant := 0; ant < antCount; ant++ {
+		shortestPath := 0
+		shortestTime := pathLengths[0] + antDistribution[0]
 
 		for i := 1; i < len(paths); i++ {
-			arrivalTime := pathLengths[i] + distribution[i] + 1
-			if arrivalTime < bestArrivalTime {
-				bestPath = i
-				bestArrivalTime = arrivalTime
+			currentTime := pathLengths[i] + antDistribution[i]
+			if currentTime < shortestTime {
+				shortestPath = i
+				shortestTime = currentTime
 			}
 		}
 
-		distribution[bestPath]++
+		antDistribution[shortestPath]++
 	}
 
-	return distribution
+	return antDistribution
 }
