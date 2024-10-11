@@ -2,51 +2,59 @@ package simulator
 
 import (
 	"fmt"
-	"strings"
-
 	"lemin/pathfinder"
 )
 
-type AntMove struct {
-	antNumber int
-	room      string
-}
+func PrintAntMovements(paths [][]string, antCount int) {
+	antDistribution := pathfinder.DistributeAnts(paths, antCount)
 
-func PrintAntMovements(paths [][]string, numAnts int) {
-	antsInEachPath := pathfinder.DistributeAnts(paths, numAnts)
-	antPositions := make([]int, numAnts+1)
-	antPaths := make([]int, numAnts+1)
+	type AntMove struct {
+		antNumber int
+		room      string
+	}
+
+	antPosition := make([]int, antCount+1)
+	antPath := make([]int, antCount+1)
 	currentAnt := 1
 
-	for pathIndex, antsInPath := range antsInEachPath {
+	for pathIndex, antsInPath := range antDistribution {
 		for i := 0; i < antsInPath; i++ {
-			antPaths[currentAnt] = pathIndex
+			antPath[currentAnt] = pathIndex
 			currentAnt++
 		}
 	}
 
-	var result strings.Builder
 	for {
-		moves := make([]AntMove, 0, numAnts)
+		var moves []AntMove
 		allFinished := true
-		antPresent := make(map[string]bool)
+		roomOccupancy := make(map[string]bool)
+		endReached := make(map[int]bool)
 
-		for ant := 1; ant <= numAnts; ant++ {
-			pathIndex := antPaths[ant]
-			path := paths[pathIndex]
-
-			if antPositions[ant] < len(path) {
+		for ant := 1; ant <= antCount; ant++ {
+			pathIndex := antPath[ant]
+			if antPosition[ant] < len(paths[pathIndex]) {
 				allFinished = false
-				nextRoom := path[antPositions[ant]]
+				nextRoom := paths[pathIndex][antPosition[ant]]
 
-				if canMoveToRoom(nextRoom, path, antPresent) {
-					antPositions[ant]++
-					if nextRoom != path[0] {
-						moves = append(moves, AntMove{ant, nextRoom})
-						if nextRoom != path[len(path)-1] {
-							antPresent[nextRoom] = true
+				if !roomOccupancy[nextRoom] || nextRoom == paths[pathIndex][0] || nextRoom == paths[pathIndex][len(paths[pathIndex])-1] {
+					if nextRoom == paths[pathIndex][len(paths[pathIndex])-1] {
+						if !endReached[pathIndex] {
+							antPosition[ant]++
+							if nextRoom != paths[pathIndex][0] {
+								moves = append(moves, AntMove{ant, nextRoom})
+							}
+						}
+						endReached[pathIndex] = true
+					} else {
+						antPosition[ant]++
+						if nextRoom != paths[pathIndex][0] {
+							moves = append(moves, AntMove{ant, nextRoom})
 						}
 					}
+				}
+
+				if nextRoom != paths[pathIndex][0] && nextRoom != paths[pathIndex][len(paths[pathIndex])-1] {
+					roomOccupancy[nextRoom] = true
 				}
 			}
 		}
@@ -55,18 +63,9 @@ func PrintAntMovements(paths [][]string, numAnts int) {
 			break
 		}
 
-		printMoves(&result, moves)
-		fmt.Println(result.String())
-		result.Reset()
-	}
-}
-
-func canMoveToRoom(room string, path []string, antPresent map[string]bool) bool {
-	return !antPresent[room] || room == path[0] || room == path[len(path)-1]
-}
-
-func printMoves(result *strings.Builder, moves []AntMove) {
-	for _, move := range moves {
-		result.WriteString(fmt.Sprintf("L%d-%s ", move.antNumber, move.room))
+		for _, move := range moves {
+			fmt.Printf("L%d-%s ", move.antNumber, move.room)
+		}
+		fmt.Println()
 	}
 }

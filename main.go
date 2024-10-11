@@ -29,11 +29,14 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	allPaths := colony.FindAllPaths()
+	allPaths := pathfinder.FindAllPaths(colony)
+	if len(allPaths) == 0{
+		log.Fatalln("no path found")
+	}
 	pathfinder.SortPaths(&allPaths)
 	fmt.Println(allPaths)
 
-	optimizedPaths := pathfinder.FindOptimalPaths(allPaths, colony.Start.Key, colony.End.Key, colony.AntCount)
+	optimizedPaths := pathfinder.FindDisjointPaths(allPaths, colony.Start.Key, colony.End.Key, colony.AntCount)
 	fmt.Println(optimizedPaths)
 
 	// Print ant movements

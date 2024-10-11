@@ -155,29 +155,3 @@ func (c *Colony) SetEnd(key string) {
 	}
 	c.End = end
 }
-
-func (c *Colony) FindAllPaths() [][]string {
-	var allPaths [][]string
-	DFS(c.Start, c.End, []string{}, &allPaths)
-	return allPaths
-}
-
-func DFS(start *Room, end *Room, path []string, allPaths *[][]string) {
-	if len(*allPaths) > 10000 {
-		return
-	}
-	start.Visited = true
-	path = append(path, start.Key)
-
-	if start == end {
-		*allPaths = append(*allPaths, append([]string{}, path...))
-	} else {
-		for _, next := range start.Tunnels {
-			if !next.Visited {
-				DFS(next, end, path, allPaths)
-			}
-		}
-	}
-
-	start.Visited = false
-}

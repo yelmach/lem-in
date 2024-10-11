@@ -8,6 +8,9 @@ import (
 
 func CheckingCoord(line string, coordMap map[[2]int]bool) error {
 	parts := strings.Fields(line)
+	if len(parts) != 3 {
+		return fmt.Errorf("ERROR: Invalid room format")
+	}
 	if strings.HasPrefix(line, "L") {
 		return fmt.Errorf("ERROR: Invalid room name")
 	}
