@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+// ParseInput parses the input lines and extracts the number of ants, rooms, and tunnels.
+// It returns the number of ants, a slice of room descriptions, a slice of tunnel descriptions, and any error encountered.
 func ParseInput(lines []string) (int, []string, []string, error) {
 	var numberOfAnts int
 	var rooms []string
@@ -15,6 +17,7 @@ func ParseInput(lines []string) (int, []string, []string, error) {
 	for i := 0; i < len(lines); i++ {
 		lines[i] = strings.TrimSpace(lines[i])
 
+		// Skip empty lines and comments (except ##start and ##end)
 		if lines[i] == "" || (strings.HasPrefix(lines[i], "#") && lines[i] != "##start" && lines[i] != "##end") {
 			continue
 		}
