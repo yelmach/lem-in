@@ -41,12 +41,12 @@ func main() {
 	pathfinder.SortPaths(&allPaths)
 
 	// Find the optimal set of paths for the ants to take
-	optimizedPaths := pathfinder.FindOptimalPaths(allPaths, colony.Start.Key, colony.End.Key, colony.AntCount)
+	bestPaths := pathfinder.FindOptimalPaths(allPaths, colony.Start.Key, colony.End.Key, colony.AntCount)
 
 	// Print the original input data
 	fmt.Println(string(data))
 	fmt.Println()
 
 	// Simulate and print the ant movements
-	simulator.PrintAntMovements(optimizedPaths, colony.AntCount)
+	simulator.PrintAntMovements(bestPaths, colony.AntCount)
 }
