@@ -1,207 +1,114 @@
 package simulator
 
-import (
-	"fmt"
+import "fmt"
 
-	"lemin/pathfinder"
-)
+// PrintAntMovements simulates the movement of ants through the best paths.
+// It takes the best paths and the total number of ants as input, calculates
+// the optimal distribution of ants across paths, and then prints the movements.
+func PrintAntMovements(bestPath [][]string, antCount int) {
+	// pathCosts holds the cost (length) of each path minus the start and end rooms.
+	pathCosts := make([]int, len(bestPath))
+	// antsOnPath keeps track of how many ants are assigned to each path.
+	antsOnPath := make([]int, len(bestPath))
 
-// PrintAntMovements simulates and prints the movement of ants through the colony.
-// It takes the optimal paths and the total number of ants as input.
-// func PrintAntMovements(paths [][]string, antCount int) {
-//     // Distribute ants among the paths using a function from the pathfinder package
-//     antDistribution := pathfinder.DistributeAnts(paths, antCount)
+	// Initialize path costs and assign at least one ant to each path.
+	for i, path := range bestPath {
+		pathCosts[i] = len(path) - 2 // Exclude start and end rooms
+		antsOnPath[i] = 1
+		antCount-- // Deduct one ant as it's assigned to this path.
+	}
 
-//     // Define a struct to represent a single move of an ant
-//     type AntMove struct {
-//         antNumber int    // The number of the ant making the move
-//         room      string // The room the ant is moving to
-//     }
+	// Distribute the remaining ants to paths, preferring the shorter ones.
+	for antCount > 0 {
+		minIndex := 0
+		// Find the path that currently offers the least total cost (path cost + ants).
+		for i := 1; i < len(bestPath); i++ {
+			if pathCosts[i]+antsOnPath[i] < pathCosts[minIndex]+antsOnPath[minIndex] {
+				minIndex = i
+			}
+		}
+		// Assign the ant to the path with the minimum cost.
+		antsOnPath[minIndex]++
+		antCount--
+	}
 
-//     // Initialize slice to track the current position of each ant in its path
-//     antPosition := make([]int, antCount+1)
-//     // Initialize slice to track which path each ant is following
-//     antPath := make([]int, antCount+1)
-//     // Initialize a counter for assigning ants to paths
-//     currentAnt := 1
+	// Print the movements of ants based on the distribution across paths.
+	printMoves(bestPath, antsOnPath)
+}
 
-//     // Assign paths to ants based on the calculated distribution
-//     for pathIndex, antsInPath := range antDistribution {
-//         for i := 0; i < antsInPath; i++ {
-//             antPath[currentAnt] = pathIndex
-//             currentAnt++
-//         }
-//     }
+// printMoves simulates and prints the actual movement of ants through the paths.
+// It takes the paths and the number of ants assigned to each path as input.
+// The function continues to move ants and print their positions until all ants
+// have reached the end of their respective paths.
+func printMoves(paths [][]string, antsPerPath []int) {
+	// antPositions keeps track of the current positions of ants on each path.
+	antPositions := make([][]string, len(paths))
+	for i, path := range paths {
+		antPositions[i] = make([]string, len(path))
+	}
 
-//     // Start the main simulation loop
-//     for {
-//         // Initialize a slice to store moves for this turn
-//         var moves []AntMove
-//         // Assume all ants have finished, will be set to false if any ant moves
-//         allFinished := true
-//         // Map to track which rooms are occupied this turn
-//         roomOccupancy := make(map[string]bool)
-//         // Map to track which paths have reached their end
-//         endReached := make(map[int]bool)
+	antID := 1 // Track the ID of the current ant being moved.
+	for {
+		// Move ants one step forward along their respective paths.
+		move(antPositions)
 
-//         // Iterate over all ants to determine their moves
-//         for ant := 1; ant <= antCount; ant++ {
-//             // Get the path index for this ant
-//             pathIndex := antPath[ant]
-//             // Check if the ant hasn't reached the end of its path
-//             if antPosition[ant] < len(paths[pathIndex]) {
-//                 // At least one ant hasn't finished, so set allFinished to false
-//                 allFinished = false
-//                 // Get the next room for this ant
-//                 nextRoom := paths[pathIndex][antPosition[ant]]
+		// Place new ants at the start of their paths as long as there are remaining ants.
+		for pathIndex, remainingAnts := range antsPerPath {
+			if remainingAnts > 0 {
+				antPositions[pathIndex][1] = fmt.Sprintf("L%d", antID) // Place the ant in the first room after start
+				antID++
+				antsPerPath[pathIndex]-- // Decrease the count of remaining ants for this path.
+			}
+		}
 
-//                 // Check if the ant can move to the next room
-//                 if !roomOccupancy[nextRoom] || nextRoom == paths[pathIndex][0] || nextRoom == paths[pathIndex][len(paths[pathIndex])-1] {
-//                     if nextRoom == paths[pathIndex][len(paths[pathIndex])-1] {
-//                         // Handle end room
-//                         if !endReached[pathIndex] {
-//                             // Move the ant forward
-//                             antPosition[ant]++
-//                             // Add the move to the list if it's not the start room
-//                             if nextRoom != paths[pathIndex][0] {
-//                                 moves = append(moves, AntMove{ant, nextRoom})
-//                             }
-//                         }
-//                         // Mark this path as having reached the end
-//                         endReached[pathIndex] = true
-//                     } else {
-//                         // Handle regular room
-//                         // Move the ant forward
-//                         antPosition[ant]++
-//                         // Add the move to the list if it's not the start room
-//                         if nextRoom != paths[pathIndex][0] {
-//                             moves = append(moves, AntMove{ant, nextRoom})
-//                         }
-//                     }
-//                 }
-//                 // Mark room as occupied if it's not the start or end room
-//                 if nextRoom != paths[pathIndex][0] && nextRoom != paths[pathIndex][len(paths[pathIndex])-1] {
-//                     roomOccupancy[nextRoom] = true
-//                 }
-//             }
-//         }
-//         // Exit the loop if all ants have reached the end
-//         if allFinished {
-//             break
-//         }
+		// Print the current positions of all ants.
+		printCurrentPositions(antPositions, paths)
 
-//         // Print the moves for this turn
-//         for _, move := range moves {
-//             fmt.Printf("L%d-%s ", move.antNumber, move.room)
-//         }
-//         // Print a newline to separate turns
-//         fmt.Println()
-//     }
-// }
-
-// PrintAntMovements simulates and prints the movement of ants through the colony.
-func PrintAntMovements(paths [][]string, antCount int) {
-	antDistribution := pathfinder.DistributeAnts(paths, antCount)
-	antPositions, antPaths := initializeAnts(antCount, antDistribution)
-
-	for !allAntsFinished(antPositions, paths, antPaths) {
-		moves := simulateTurn(antPositions, antPaths, paths)
-		printMoves(moves)
+		// If all ants have reached the end of their paths, exit the loop.
+		if allAntsReachedEnd(antPositions) {
+			break
+		}
+		fmt.Println() // Print a newline to separate the moves.
 	}
 }
 
-// AntMove represents a single move of an ant
-type AntMove struct {
-	antNumber int
-	room      string
-}
-
-// initializeAnts sets up the initial state for all ants
-func initializeAnts(antCount int, antDistribution []int) ([]int, []int) {
-	antPositions := make([]int, antCount+1)
-	antPaths := make([]int, antCount+1)
-	currentAnt := 1
-
-	for pathIndex, antsInPath := range antDistribution {
-		for i := 0; i < antsInPath; i++ {
-			antPaths[currentAnt] = pathIndex
-			currentAnt++
+// printCurrentPositions prints the current positions of ants in their respective rooms.
+func printCurrentPositions(antPositions [][]string, paths [][]string) {
+	// Iterate through each path and print the position of ants in reverse order.
+	for pathIndex, path := range antPositions {
+		for roomIndex := len(path) - 1; roomIndex > 0; roomIndex-- {
+			if path[roomIndex] != "" {
+				// Print the ant ID along with the room it is in.
+				fmt.Printf("%s-%s ", path[roomIndex], paths[pathIndex][roomIndex])
+			}
 		}
 	}
-
-	return antPositions, antPaths
 }
 
-// allAntsFinished checks if all ants have reached the end of their paths
-func allAntsFinished(antPositions []int, paths [][]string, antPaths []int) bool {
-	for ant := 1; ant < len(antPositions); ant++ {
-		if antPositions[ant] < len(paths[antPaths[ant]])-1 {
-			return false
+// allAntsReachedEnd checks if all ants have reached the end of their paths.
+// It returns true if all ants have reached the end, otherwise returns false.
+func allAntsReachedEnd(antPositions [][]string) bool {
+	// Check each path to see if any ant is still in transit (i.e., not at the end).
+	for _, path := range antPositions {
+		for roomIndex := 1; roomIndex < len(path); roomIndex++ {
+			if path[roomIndex] != "" {
+				return false // Ant found still in transit, so not all ants have reached the end.
+			}
 		}
 	}
-	return true
+	return true // All ants have reached the end of their paths.
 }
 
-// simulateTurn simulates one turn of ant movements
-func simulateTurn(antPositions []int, antPaths []int, paths [][]string) []AntMove {
-	var moves []AntMove
-	roomOccupancy := make(map[string]bool)
-	endReached := make(map[int]bool)
-
-	for ant := 1; ant < len(antPositions); ant++ {
-		move := tryMoveAnt(ant, antPositions, antPaths, paths, roomOccupancy, endReached)
-		if move != nil {
-			moves = append(moves, *move)
+// move simulates the movement of ants along their paths.
+// It shifts each ant one step forward along its path,
+// emptying the start room of each path in the process.
+func move(antPositions [][]string) {
+	// Move ants along each path by shifting them forward by one room.
+	for pathIndex, path := range antPositions {
+		for roomIndex := len(path) - 1; roomIndex > 0; roomIndex-- {
+			// Shift the ant from the previous room to the current room.
+			antPositions[pathIndex][roomIndex] = antPositions[pathIndex][roomIndex-1]
 		}
+		antPositions[pathIndex][0] = "" // Clear the start room after moving the ants.
 	}
-
-	return moves
-}
-
-// tryMoveAnt attempts to move a single ant
-func tryMoveAnt(ant int, antPositions []int, antPaths []int, paths [][]string, roomOccupancy map[string]bool, endReached map[int]bool) *AntMove {
-	pathIndex := antPaths[ant]
-	currentPath := paths[pathIndex]
-
-	if antPositions[ant] >= len(currentPath)-1 {
-		return nil // Ant has already finished
-	}
-
-	nextRoom := currentPath[antPositions[ant]+1]
-
-	if canMoveToRoom(nextRoom, currentPath, roomOccupancy) {
-		return moveAnt(ant, nextRoom, antPositions, pathIndex, currentPath, roomOccupancy, endReached)
-	}
-
-	return nil
-}
-
-// canMoveToRoom checks if an ant can move to the next room
-func canMoveToRoom(nextRoom string, path []string, roomOccupancy map[string]bool) bool {
-	return !roomOccupancy[nextRoom] || nextRoom == path[0] || nextRoom == path[len(path)-1]
-}
-
-// moveAnt moves an ant to the next room and returns the move
-func moveAnt(ant int, nextRoom string, antPositions []int, pathIndex int, path []string, roomOccupancy map[string]bool, endReached map[int]bool) *AntMove {
-	antPositions[ant]++
-
-	if nextRoom == path[len(path)-1] {
-		if !endReached[pathIndex] {
-			endReached[pathIndex] = true
-			return &AntMove{ant, nextRoom}
-		}
-	} else if nextRoom != path[0] {
-		roomOccupancy[nextRoom] = true
-		return &AntMove{ant, nextRoom}
-	}
-
-	return nil
-}
-
-// printMoves prints all moves for a single turn
-func printMoves(moves []AntMove) {
-	for _, move := range moves {
-		fmt.Printf("L%d-%s ", move.antNumber, move.room)
-	}
-	fmt.Println()
 }
