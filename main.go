@@ -45,6 +45,7 @@ func main() {
 
 	// Print the original input data
 	fmt.Println(string(data))
+	fmt.Println()
 
 	// Simulate and print the ant movements
 	simulator.PrintAntMovements(optimizedPaths, colony.AntCount)
