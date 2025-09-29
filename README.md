@@ -1,4 +1,4 @@
-# lem-in - Digital Ant Farm Pathfinding
+# lem-in - DFS Ant Farm Pathfinding
 
 A Go implementation of an ant colony simulation that finds the optimal paths for ants to traverse from a start room to an end room through a network of tunnels and rooms.
 
